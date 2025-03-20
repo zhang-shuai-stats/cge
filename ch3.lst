@@ -1,0 +1,682 @@
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 1
+第3章练习题
+C o m p i l a t i o n
+
+
+   2   
+   3  *对集合说明和定义。在集合名称右边的中文是为了方便的文字说明，不是GAMS指令。可以省略。
+   4   
+   5  set ac     总集        /sec1,sec2,sec3,labor,capital,use,total/;
+   6  set i(ac)  商品部门集  /sec1,sec2,sec3/;
+   7  set x(ac)  要素集      /labor,capital/;
+   8  set s(ac)  为了模拟农业价格变化问题建立的子集  /sec2,sec3/;
+   9   
+  10  alias (i,j);
+  11  alias (s,ss);
+  12   
+  13  *将投入产出表的数据全部读入。
+  14  table IO(*,*)
+  15          sec1    sec2    sec3    use    Total
+  16  sec1    160     150     90      480     880
+  17  sec2    140     320     170     900     1530
+  18  sec3    80      150     250     590     1070
+  19  labor   320     350     410
+  20  capital 180     560     150
+  21  Total   880    1530    1070
+  22  ;
+  23   
+  24  parameter
+  25   
+  26  realq(i,j)  real quantities of the IO table after deflating price 除掉价格后的真实产量
+  27  realf(x,j)  real quantities of factor 除掉要素价格后的真实要素投入量
+  28  q0(i)       initial value for real total output 真实总产出的初始值
+  29  a(i,j)      direct input-output coefficients 投入产出直接消耗系数
+  30  b(x,j)      factor-input-output coefficients  要素消耗系数
+  31  p0(i)       initial price of commodities        初始商品价格
+  32  w0(x)       initial price of factors     初始要素价格
+  33  use(i)      final use 最终使用
+  34  lab(j)      labor input 劳动投入
+  35  cap(j)      capital input 资本投入
+  36  ;
+  37   
+  38   
+  39  *对参数赋值并校调(估算)参数  (calibration)
+  40   
+      注意以下的等式中包含了价格起始变量p0和w0，这是因为价值型投入产出模型中的数值为价值的缘故。将价值型投入产出表中的价值数字除以价格后获取真实产量和真实要素投入量
+      再从真实数量中获取投入产出系数， 虽然因为起始价格为1，在下列等式中省略价格起始变量并不影响数字结果，但是概念上有错误。这个概念在以后从SAM表上建立CGE模型很重要。
+  45   
+  46  p0(i)=1;
+  47  w0(x)=1;
+  48  realq(i,j)=IO(i,j)/p0(i);
+  49  realf(x,j)=IO(x,j)/w0(x);
+  50  q0(i)=IO("total",i)/p0(i);
+  51  a(i,j)=realq(i,j)/q0(j);
+  52  b(x,j)=realf(x,j)/q0(j);
+  53  use(i)=IO(i,"use")/p0(i);
+  54  lab(j)=IO("labor",j)/w0("labor");
+  55  cap(j)=IO("capital",j)/w0("capital");
+  56   
+  57  *说明和定义内生变量 variable
+  58   
+  59  variable
+  60  p(i)            price of commodities
+  61  w(x)            price of factors
+  62  q(i)            total output 总产出变量
+  63  ;
+  64   
+  65  display realq,realf,Q0,a,b,p0,w0,use,lab,cap;
+  66   
+  67  *说明函数并对此赋值  declare equation
+  68  equation
+  69  priceequ(j);
+  70   
+  71  priceequ(j)..
+  72  sum(i,a(i,j)*p(i))+sum(x,b(x,j)*w(x))=e=p(j);
+  73   
+  74  *赋予内生变量初始值
+  75  p.l(i)=p0(i);
+  76  w.fx(x)=w0(x);
+  77   
+  78  *说明模型并指令运行
+  79  model IOPricemodel  /all/;
+  80  solve IOPricemodel using mcp
+  81  ;
+  82   
+  83  *结果显示
+  84  display p.l,  w.l;
+  85   
+  86  *=========================
+  87  *模拟：资本投入增加10％
+  88  *=========================
+  89   
+  90  *建立新参数。说明并赋值
+  91  parameter
+  92  wl1         labor price
+  93  wk1         capital cost
+  94  ;
+  95   
+  96  wl1=1;
+  97  wk1=1.1;
+  98   
+  99  display wl1, wk1;
+ 100   
+ 101   
+ 102  *说明并定义新函数
+ 103  equation
+ 104  Sim1priceequ(j);
+ 105   
+ 106  Sim1priceequ(j)..
+ 107  sum(i,a(i,j)*p(i))+b("capital",j)*wk1+b("labor",j)*wl1=e=p(j);
+ 108   
+ 109  *赋予内生变量初始值
+ 110  p.l(i)=p0(i);
+ 111   
+ 112  *指令模型运行
+ 113  model SimPricemodel  /Sim1priceequ/;
+ 114  solve SimPricemodel using mcp
+ 115  ;
+ 116   
+ 117  *从解出的数值求增值
+ 118  parameter
+ 119  Pincrease(j)   increase in price in various sectors
+ 120  ;
+ 121   
+ 122  Pincrease(j)=p.l(j)-1
+ 123   
+ 124  *结果显示
+ 125  display p.l,  Pincrease;
+ 126   
+ 127  *================================
+ 128  *模拟：农业价格增加15％
+ 129  *================================
+ 130  *注意：在这个情况下，模型的结构有变化，只有两个等式，即，为商品1和商品3的价格等式，因此用子集s
+ 131  *建立新参数。说明并赋值
+ 132   
+ 133  parameter
+ 134  p20(s)       price of sec2 and sec3
+ 135  p2fx(ss)     price of sector 1
+ 136  a2(s,ss)     direct input-output coefficients for sec2 and sec3
+ 137  a22(ss)      direct input-output coefficients for sec1
+ 138  b2(x,ss)     factor-input-output coefficients for sec2 and sec3
+ 139  ;
+ 140   
+ 141  p20(s)=1;
+ 142  p2fx(ss)=1.15;
+ 143  a2(s,ss)=IO(s,ss)/IO("total",ss);
+ 144  a22(ss)=IO("sec1",ss)/IO("total",ss);
+ 145  b2(x,ss)=IO(x,ss)/IO("total",ss);
+ 146   
+ 147  display a2, b2, p2fx;
+ 148   
+ 149  variable
+ 150  p2(s);
+ 151   
+ 152  equation
+ 153  Sim2priceequ(ss);
+ 154   
+ 155  Sim2priceequ(ss)..
+ 156  sum(s,a2(s,ss)*p2(s))+a22(ss)*p2fx(ss)+sum(x,b2(x,ss)*w(x))=e=p2(ss);
+ 157   
+ 158  p2.l(s)=p20(s);
+ 159   
+ 160  model Sim2Pricemodel  /Sim2priceequ/;
+ 161  solve Sim2Pricemodel using mcp
+ 162  ;
+ 163   
+ 164  parameter
+ 165  Pincrease2(ss)   increase in price in various sectors
+ 166  ;
+ 167   
+ 168  Pincrease2(ss)=p2.l(ss)-1
+ 169   
+ 170  *结果显示
+ 171  display p2.l,  Pincrease2;
+ 172   
+ 173  *结束 the end
+
+
+COMPILATION TIME     =        0.007 SECONDS      3 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 2
+第3章练习题
+E x e c u t i o n
+
+
+----     65 PARAMETER realq  real quantities of the IO table after deflating price 除掉价格后的真实产量
+
+            sec1        sec2        sec3
+
+sec1     160.000     150.000      90.000
+sec2     140.000     320.000     170.000
+sec3      80.000     150.000     250.000
+
+
+----     65 PARAMETER realf  real quantities of factor 除掉要素价格后的真实要素投入量
+
+               sec1        sec2        sec3
+
+labor       320.000     350.000     410.000
+capital     180.000     560.000     150.000
+
+
+----     65 PARAMETER q0  initial value for real total output 真实总产出的初始值
+
+sec1  880.000,    sec2 1530.000,    sec3 1070.000
+
+
+----     65 PARAMETER a  direct input-output coefficients 投入产出直接消耗系数
+
+            sec1        sec2        sec3
+
+sec1       0.182       0.098       0.084
+sec2       0.159       0.209       0.159
+sec3       0.091       0.098       0.234
+
+
+----     65 PARAMETER b  factor-input-output coefficients  要素消耗系数
+
+               sec1        sec2        sec3
+
+labor         0.364       0.229       0.383
+capital       0.205       0.366       0.140
+
+
+----     65 PARAMETER p0  initial price of commodities        初始商品价格
+
+sec1 1.000,    sec2 1.000,    sec3 1.000
+
+
+----     65 PARAMETER w0  initial price of factors     初始要素价格
+
+labor   1.000,    capital 1.000
+
+
+----     65 PARAMETER use  final use 最终使用
+
+sec1 480.000,    sec2 900.000,    sec3 590.000
+
+
+----     65 PARAMETER lab  labor input 劳动投入
+
+sec1 320.000,    sec2 350.000,    sec3 410.000
+
+
+----     65 PARAMETER cap  capital input 资本投入
+
+sec1 180.000,    sec2 560.000,    sec3 150.000
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 3
+第3章练习题
+Equation Listing    SOLVE IOPricemodel Using MCP From line 81
+
+
+---- priceequ  =E=  
+
+priceequ(sec1)..  - 0.818181818181818*p(sec1) + 0.159090909090909*p(sec2) + 0.0909090909090909*p(sec3) + 0.363636363636364*w(labor) + 0.204545454545455*w(capital) =E= 0 ; (LHS = 0)
+     
+priceequ(sec2)..  0.0980392156862745*p(sec1) - 0.790849673202614*p(sec2) + 0.0980392156862745*p(sec3) + 0.228758169934641*w(labor) + 0.366013071895425*w(capital) =E= 0 ; (LHS = 0)
+     
+priceequ(sec3)..  0.0841121495327103*p(sec1) + 0.158878504672897*p(sec2) - 0.766355140186916*p(sec3) + 0.383177570093458*w(labor) + 0.14018691588785*w(capital) =E= 0 ; (LHS = 0)
+     
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 4
+第3章练习题
+Column Listing      SOLVE IOPricemodel Using MCP From line 81
+
+
+---- p  price of commodities
+
+p(sec1)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+       -0.8182  priceequ(sec1)
+        0.098   priceequ(sec2)
+        0.0841  priceequ(sec3)
+
+p(sec2)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        0.1591  priceequ(sec1)
+       -0.7908  priceequ(sec2)
+        0.1589  priceequ(sec3)
+
+p(sec3)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        0.0909  priceequ(sec1)
+        0.098   priceequ(sec2)
+       -0.7664  priceequ(sec3)
+
+
+---- w  price of factors
+
+w(labor)
+                (.LO, .L, .UP, .M = 1, 1, 1, 0)
+        0.3636  priceequ(sec1)
+        0.2288  priceequ(sec2)
+        0.3832  priceequ(sec3)
+
+w(capital)
+                (.LO, .L, .UP, .M = 1, 1, 1, 0)
+        0.2045  priceequ(sec1)
+        0.366   priceequ(sec2)
+        0.1402  priceequ(sec3)
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 5
+第3章练习题
+Range Statistics    SOLVE IOPricemodel Using MCP From line 81
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [        NA,        NA] - Zero values observed as well
+Bound     [min, max] : [ 1.000E+00, 1.000E+00]
+Matrix    [min, max] : [ 8.411E-02, 8.182E-01]
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 6
+第3章练习题
+Model Statistics    SOLVE IOPricemodel Using MCP From line 81
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           1     SINGLE EQUATIONS            3
+BLOCKS OF VARIABLES           2     SINGLE VARIABLES            5
+NON ZERO ELEMENTS            15     NON LINEAR N-Z              0
+CODE LENGTH                   0     CONSTANT POOL              16
+
+
+GENERATION TIME      =        0.005 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 7
+第3章练习题
+Solution Report     SOLVE IOPricemodel Using MCP From line 81
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   IOPricemodel        
+     TYPE    MCP                 
+     SOLVER  PATH                FROM LINE  81
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+
+ RESOURCE USAGE, LIMIT          0.003 10000000000.000
+ ITERATION COUNT, LIMIT         0    2147483647
+ EVALUATION ERRORS              0             0
+*** This solver runs with a demo license. No commercial use.
+3 row/cols, 9 non-zeros, 100.00% dense.
+
+Path 5.2.01 (Wed Mar  5 17:53:09 2025)
+Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
+
+
+---- EQU priceequ  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1          .       -2.77556E-17          .             1.0000      
+sec2          .       -1.66533E-16          .             1.0000      
+sec3          .       2.775558E-17          .             1.0000      
+
+---- VAR p  price of commodities
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1        -INF            1.0000        +INF      -2.77556E-17      
+sec2        -INF            1.0000        +INF      -1.66533E-16      
+sec3        -INF            1.0000        +INF      2.775558E-17      
+
+---- VAR w  price of factors
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+labor           1.0000         1.0000         1.0000          .          
+capital         1.0000         1.0000         1.0000          .          
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0  REDEFINED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 8
+第3章练习题
+E x e c u t i o n
+
+
+----     84 VARIABLE p.L  price of commodities
+
+sec1 1.000,    sec2 1.000,    sec3 1.000
+
+
+----     84 VARIABLE w.L  price of factors
+
+labor   1.000,    capital 1.000
+
+
+----     99 PARAMETER wl1                  =        1.000  labor price
+            PARAMETER wk1                  =        1.100  capital cost
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 9
+第3章练习题
+Equation Listing    SOLVE SimPricemodel Using MCP From line 115
+
+
+---- Sim1priceequ  =E=  
+
+Sim1priceequ(sec1)..  - 0.818181818181818*p(sec1) + 0.159090909090909*p(sec2) + 0.0909090909090909*p(sec3) =E= -0.588636363636364 ; (LHS = -0.568181818181818, INFES = 0.0204545454545455 ****)
+     
+Sim1priceequ(sec2)..  0.0980392156862745*p(sec1) - 0.790849673202614*p(sec2) + 0.0980392156862745*p(sec3) =E= -0.631372549019608 ; (LHS = -0.594771241830065, INFES = 0.0366013071895426 ****)
+     
+Sim1priceequ(sec3)..  0.0841121495327103*p(sec1) + 0.158878504672897*p(sec2) - 0.766355140186916*p(sec3) =E= -0.537383177570093 ; (LHS = -0.523364485981308, INFES = 0.014018691588785 ****)
+     
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 10
+第3章练习题
+Column Listing      SOLVE SimPricemodel Using MCP From line 115
+
+
+---- p  price of commodities
+
+p(sec1)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, -2.77555756156289E-17)
+       -0.8182  Sim1priceequ(sec1)
+        0.098   Sim1priceequ(sec2)
+        0.0841  Sim1priceequ(sec3)
+
+p(sec2)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, -1.66533453693773E-16)
+        0.1591  Sim1priceequ(sec1)
+       -0.7908  Sim1priceequ(sec2)
+        0.1589  Sim1priceequ(sec3)
+
+p(sec3)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 2.77555756156289E-17)
+        0.0909  Sim1priceequ(sec1)
+        0.098   Sim1priceequ(sec2)
+       -0.7664  Sim1priceequ(sec3)
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 11
+第3章练习题
+Range Statistics    SOLVE SimPricemodel Using MCP From line 115
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 5.374E-01, 6.314E-01]
+Bound     [min, max] : [        NA,        NA]
+Matrix    [min, max] : [ 8.411E-02, 8.182E-01]
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 12
+第3章练习题
+Model Statistics    SOLVE SimPricemodel Using MCP From line 115
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           1     SINGLE EQUATIONS            3
+BLOCKS OF VARIABLES           1     SINGLE VARIABLES            3
+NON ZERO ELEMENTS             9     NON LINEAR N-Z              0
+CODE LENGTH                   0     CONSTANT POOL              16
+
+
+GENERATION TIME      =        0.000 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 13
+第3章练习题
+Solution Report     SOLVE SimPricemodel Using MCP From line 115
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   SimPricemodel       
+     TYPE    MCP                 
+     SOLVER  PATH                FROM LINE  115
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+
+ RESOURCE USAGE, LIMIT          0.002 10000000000.000
+ ITERATION COUNT, LIMIT         0    2147483647
+ EVALUATION ERRORS              0             0
+*** This solver runs with a demo license. No commercial use.
+3 row/cols, 9 non-zeros, 100.00% dense.
+
+Path 5.2.01 (Wed Mar  5 17:53:09 2025)
+Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
+
+
+---- EQU Sim1priceequ  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1        -0.5886        -0.5886        -0.5886         1.0396      
+sec2        -0.6314        -0.6314        -0.6314         1.0554      
+sec3        -0.5374        -0.5374        -0.5374         1.0341      
+
+---- VAR p  price of commodities
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1        -INF            1.0396        +INF      1.110223E-16      
+sec2        -INF            1.0554        +INF      -1.11022E-16      
+sec3        -INF            1.0341        +INF             .          
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0  REDEFINED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 14
+第3章练习题
+E x e c u t i o n
+
+
+----    125 VARIABLE p.L  price of commodities
+
+sec1 1.040,    sec2 1.055,    sec3 1.034
+
+
+----    125 PARAMETER Pincrease  increase in price in various sectors
+
+sec1 0.040,    sec2 0.055,    sec3 0.034
+
+
+----    147 PARAMETER a2  direct input-output coefficients for sec2 and sec3
+
+            sec2        sec3
+
+sec2       0.209       0.159
+sec3       0.098       0.234
+
+
+----    147 PARAMETER b2  factor-input-output coefficients for sec2 and sec3
+
+               sec2        sec3
+
+labor         0.229       0.383
+capital       0.366       0.140
+
+
+----    147 PARAMETER p2fx  price of sector 1
+
+sec2 1.150,    sec3 1.150
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 15
+第3章练习题
+Equation Listing    SOLVE Sim2Pricemodel Using MCP From line 162
+
+
+---- Sim2priceequ  =E=  
+
+Sim2priceequ(sec2)..  0.228758169934641*w(labor) + 0.366013071895425*w(capital) - 0.790849673202614*p2(sec2) + 0.0980392156862745*p2(sec3) =E= -0.112745098039216 ; (LHS = -0.0980392156862746, INFES = 0.0147058823529411 ****)
+     
+Sim2priceequ(sec3)..  0.383177570093458*w(labor) + 0.14018691588785*w(capital) + 0.158878504672897*p2(sec2) - 0.766355140186916*p2(sec3) =E= -0.0967289719626168 ; (LHS = -0.0841121495327105, INFES = 0.0126168224299064 ****)
+     
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 16
+第3章练习题
+Column Listing      SOLVE Sim2Pricemodel Using MCP From line 162
+
+
+---- w  price of factors
+
+w(labor)
+                (.LO, .L, .UP, .M = 1, 1, 1, 0)
+        0.2288  Sim2priceequ(sec2)
+        0.3832  Sim2priceequ(sec3)
+
+w(capital)
+                (.LO, .L, .UP, .M = 1, 1, 1, 0)
+        0.366   Sim2priceequ(sec2)
+        0.1402  Sim2priceequ(sec3)
+
+
+---- p2  
+
+p2(sec2)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+       -0.7908  Sim2priceequ(sec2)
+        0.1589  Sim2priceequ(sec3)
+
+p2(sec3)
+                (.LO, .L, .UP, .M = -INF, 1, +INF, 0)
+        0.098   Sim2priceequ(sec2)
+       -0.7664  Sim2priceequ(sec3)
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 17
+第3章练习题
+Range Statistics    SOLVE Sim2Pricemodel Using MCP From line 162
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 9.673E-02, 1.127E-01]
+Bound     [min, max] : [ 1.000E+00, 1.000E+00]
+Matrix    [min, max] : [ 9.804E-02, 7.908E-01]
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 18
+第3章练习题
+Model Statistics    SOLVE Sim2Pricemodel Using MCP From line 162
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           1     SINGLE EQUATIONS            2
+BLOCKS OF VARIABLES           2     SINGLE VARIABLES            4
+NON ZERO ELEMENTS             8     NON LINEAR N-Z              0
+CODE LENGTH                   0     CONSTANT POOL              16
+
+
+GENERATION TIME      =        0.000 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 19
+第3章练习题
+Solution Report     SOLVE Sim2Pricemodel Using MCP From line 162
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   Sim2Pricemodel      
+     TYPE    MCP                 
+     SOLVER  PATH                FROM LINE  162
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+
+ RESOURCE USAGE, LIMIT          0.002 10000000000.000
+ ITERATION COUNT, LIMIT         0    2147483647
+ EVALUATION ERRORS              0             0
+*** This solver runs with a demo license. No commercial use.
+2 row/cols, 4 non-zeros, 100.00% dense.
+
+Path 5.2.01 (Wed Mar  5 17:53:09 2025)
+Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
+
+
+---- EQU Sim2priceequ  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec2        -0.1127        -0.1127        -0.1127         1.0212      
+sec3        -0.0967        -0.0967        -0.0967         1.0209      
+
+---- VAR w  price of factors
+
+               LOWER          LEVEL          UPPER         MARGINAL
+
+labor           1.0000         1.0000         1.0000          .          
+capital         1.0000         1.0000         1.0000          .          
+
+---- VAR p2  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec2        -INF            1.0212        +INF             .          
+sec3        -INF            1.0209        +INF      -2.77556E-17      
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0  REDEFINED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/15/25 19:50:58 Page 20
+第3章练习题
+E x e c u t i o n
+
+
+----    171 VARIABLE p2.L  
+
+sec2 1.021,    sec3 1.021
+
+
+----    171 PARAMETER Pincrease2  increase in price in various sectors
+
+sec2 0.021,    sec3 0.021
+
+
+
+EXECUTION TIME       =        0.088 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+
+
+USER: GAMS Demo, for EULA and demo limitations see   G250131/0001CB-GEN
+      https://www.gams.com/latest/docs/UG%5FLicense.html         DC0000
+
+
+**** FILE SUMMARY
+
+Input      /Users/zhangshuai/Desktop/cge/ch3.gms
+Output     /Users/zhangshuai/Desktop/cge/ch3.lst

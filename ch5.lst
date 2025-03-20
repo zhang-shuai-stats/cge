@@ -1,0 +1,873 @@
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 1
+第五章练习题
+C o m p i l a t i o n
+
+
+   2   
+   3  *定义集合 i
+   4  set i  /sec1,sec2,sec3,lab,cap,hh/;
+   5  alias  (i,j);
+   6   
+   7  *=========== SAM表 ===============
+   8  table SAM(*,*)
+   9          sec1   sec2   sec3  lab   cap   hh     total  tartot
+  10  sec1    160    150    90                540    940    920
+  11  sec2    140    320    170               910    1540   1540
+  12  sec3    80     150    250               610    1090   2000
+  13  lab     320    360    400                      1080   2000
+  14  cap     170    550    150                      870    900
+  15  hh                          1050   860                2900
+  16  total   870    1530   1060  1050   860  2060
+  17  tartot  920    1540   2000  2000   900  2900
+  18  ;
+  19   
+  20  parameters
+  21  Q0(i,j)        initial value;
+  22   
+  23  *Assignment for parameters
+  24  Q0(i,j)=sam(i,j);
+  25   
+  26  *定义变量与函数
+  27  variables
+  28  Q(i,j) 要调整的SAM表中的各个数值
+  29  z  目标函数的数值 即平方差之和;
+  30   
+  31  *每个变量必须是非负数
+  32  positive variable Q(i,j);
+  33   
+  34  equations
+  35  sumsquare        目标函数 即平方差之和的等式
+  36  balance          各个账户的平衡限制条件 ;
+  37   
+  38  *在GAMS程序中，"$"符号是条件指令，意为"在…的条件情况下该程式有效"。它放置在程式第一个定义之后。条件指令$(SAM(i,j)意为：在SAM表上i,j位置格上的数值不等于0的情况下执行该指令。
+  39  *sqr 为计算平方的指令。
+  40  *注：如果将sqr(Q(i,j)改成(Q(i,j)**2，虽然数学和语法上也是正确的，可是用PATH的MCP解算, 结果不是最优。这是当前PATH需要改进的地方。
+  41  sumsquare..
+  42  z =e= sum((i,j)$sam(i,j),sqr(Q(i,j)-sam(i,j)));
+  43   
+  44  *注意下面等式的写法。第一是等式balance(i)，表示有i=1,..n个等式
+  45  *第二，注意sum记号里面Q(j,i）的位置变换，等号左面是行汇总，等号右边是列汇总
+  46  balance(i)..
+  47  sum(j$sam(i,j),Q(i,j)) =e= sum(j$sam(j,i),Q(j,i));
+  48   
+  49  *对变量初始值赋值
+  50  Q.l(i,j)=Q0(i,j);
+  51   
+  52  model sambal  /all/;
+  53  solve sambal using nlp minimizing z;
+  54   
+  55  *打印结果
+  56  display '第一题结果', Q.l,z.l;
+  57   
+  58  ***********************
+  59  * 2.假设居民支出数据不能动
+  60  ***********************
+  61  variables
+  62  Q1(i,j)
+  63  z1;
+  64   
+  65  positive variable Q1(i,j);
+  66   
+  67  equations
+  68  sumsquare1
+  69  balance1;
+  70   
+  71  sumsquare1..
+  72  z1 =e= sum((i,j)$sam(i,j),sqr(Q1(i,j)-sam(i,j)));
+  73   
+  74  balance1(i)..
+  75  sum(j$sam(i,j),Q1(i,j)) =e= sum(j$sam(j,i),Q1(j,i));
+  76   
+  77  *对变量初始值赋值
+  78  Q1.l(i,j)=Q0(i,j);
+  79  Q1.fx(i,"hh") = Q0(i,"hh")
+  80  model sambal1  /sumsquare1, balance1/;
+  81  solve sambal1 using nlp minimizing z1;
+  82   
+  83  *打印结果
+  84  display '第二题结果', Q1.l,z1.l;
+  85   
+  86  ***********************
+  87  * 4.RAS法平衡
+  88  ***********************
+  89  Parameter
+  90  rowdis(i)
+  91  condis(j)
+  92  maxdis
+  93  iter;
+  94   
+  95  maxdis = 0.1;
+  96  iter = 1;
+  97   
+  98  while (iter<5000 and maxdis>1e-12,
+  99  sam("total",j) = sum(i,sam(i,j));
+ 100  sam(i,j) = sam(i,j)/sam("total",j)*sam("tartot",j);
+ 101   
+ 102  sam(i,"total") = sum(j,sam(i,j));
+ 103  sam(i,j) = sam(i,j)/sam(i,"total")*sam(i,"tartot");
+ 104   
+ 105  condis(j) = abs(sum(i,sam(i,j))-sam("tartot",j));
+ 106  rowdis(i) = abs(sum(j,sam(i,j))-sam(i,"tartot"));
+ 107   
+ 108  maxdis = max{smax{j,condis(j)},smax{i,rowdis(i)}};
+ 109  iter=iter+1;
+ 110  );
+ 111   
+ 112  display '第四题结果',   sam;
+ 113   
+ 114  ***********************
+ 115  * 5.直接交叉熵平衡
+ 116  ***********************
+ 117  Parameter
+ 118  H0;
+ 119   
+ 120  H0 = sum((i,j),Q0(i,j));
+ 121   
+ 122  display H0;
+ 123   
+ 124  Variables
+ 125  Q2(i,j)
+ 126  H
+ 127  Hratio
+ 128  z2;
+ 129   
+ 130  Positive Variable Q2(i,j), H, Hratio;
+ 131   
+ 132  Equations
+ 133  Hequ
+ 134  Hratioequ
+ 135  obj
+ 136  balance2;
+ 137   
+ 138  Hequ..
+ 139  H =e= sum((i,j)$Q0(i,j),Q(i,j));
+ 140   
+ 141  Hratioequ..
+ 142  Hratio =e= H/H0;
+ 143   
+ 144  balance2(i)..
+ 145  sum(j$Q0(i,j),Q2(i,j)) =e= sum(j$Q0(j,i),Q2(j,i));
+ 146   
+ 147  obj..
+ 148  z2 =e= sum((i,j)$Q0(i,j),(1/H)*Q(i,j)*log(Q(i,j)/Q0(i,j))) - log(Hratio);
+ 149   
+ 150  Q2.l(i,j)=Q0(i,j);
+ 151  H.l = H0;
+ 152  Hratio.lo = 0.5;
+ 153  Hratio.up = 2;
+ 154   
+ 155  model sambal2  /Hequ,Hratioequ,balance2,obj/;
+ 156  solve sambal2 using nlp minimizing z2;
+ 157   
+ 158  *打印结果
+ 159  display '第五题结果', Q2.l,z2.l, Hratio.l;
+ 160   
+ 161   
+ 162   
+ 163   
+ 164   
+ 165   
+ 166   
+ 167   
+ 168   
+ 169   
+ 170   
+ 171   
+ 172  *end 结束
+
+
+COMPILATION TIME     =        0.001 SECONDS      3 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 2
+第五章练习题
+Equation Listing    SOLVE sambal Using NLP From line 53
+
+
+---- sumsquare  =E=  目标函数 即平方差之和的等式
+
+sumsquare..  (0)*Q(sec1,sec1) + (0)*Q(sec1,sec2) + (0)*Q(sec1,sec3) + (0)*Q(sec1,hh) + (0)*Q(sec2,sec1) + (0)*Q(sec2,sec2) + (0)*Q(sec2,sec3) + (0)*Q(sec2,hh) + (0)*Q(sec3,sec1) + (0)*Q(sec3,sec2) + (0)*Q(sec3,sec3) + (0)*Q(sec3,hh) + (0)*Q(lab,sec1) + (0)*Q(lab,sec2) + (0)*Q(lab,sec3) + (0)*Q(cap,sec1) + (0)*Q(cap,sec2) + (0)*Q(cap,sec3) + (0)*Q(hh,lab) + (0)*Q(hh,cap) + z =E= 0 ; (LHS = 0)
+     
+
+---- balance  =E=  各个账户的平衡限制条件
+
+balance(sec1)..  Q(sec1,sec2) + Q(sec1,sec3) + Q(sec1,hh) - Q(sec2,sec1) - Q(sec3,sec1) - Q(lab,sec1) - Q(cap,sec1) =E= 0 ; (LHS = 70, INFES = 70 ****)
+     
+balance(sec2)..  - Q(sec1,sec2) + Q(sec2,sec1) + Q(sec2,sec3) + Q(sec2,hh) - Q(sec3,sec2) - Q(lab,sec2) - Q(cap,sec2) =E= 0 ; (LHS = 10, INFES = 10 ****)
+     
+balance(sec3)..  - Q(sec1,sec3) - Q(sec2,sec3) + Q(sec3,sec1) + Q(sec3,sec2) + Q(sec3,hh) - Q(lab,sec3) - Q(cap,sec3) =E= 0 ; (LHS = 30, INFES = 30 ****)
+     
+REMAINING 3 ENTRIES SKIPPED
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 3
+第五章练习题
+Column Listing      SOLVE sambal Using NLP From line 53
+
+
+---- Q  要调整的SAM表中的各个数值
+
+Q(sec1,sec1)
+                (.LO, .L, .UP, .M = 0, 160, +INF, 0)
+       (0)      sumsquare
+
+Q(sec1,sec2)
+                (.LO, .L, .UP, .M = 0, 150, +INF, 0)
+       (0)      sumsquare
+        1       balance(sec1)
+       -1       balance(sec2)
+
+Q(sec1,sec3)
+                (.LO, .L, .UP, .M = 0, 90, +INF, 0)
+       (0)      sumsquare
+        1       balance(sec1)
+       -1       balance(sec3)
+
+REMAINING 17 ENTRIES SKIPPED
+
+---- z  目标函数的数值 即平方差之和
+
+z
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       sumsquare
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 4
+第五章练习题
+Range Statistics    SOLVE sambal Using NLP From line 53
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [        NA,        NA] - Zero values observed as well
+Bound     [min, max] : [        NA,        NA] - Zero values observed as well
+Matrix    [min, max] : [ 1.000E+00, 1.000E+00] - Zero values observed as well
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 5
+第五章练习题
+Model Statistics    SOLVE sambal Using NLP From line 53
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           2     SINGLE EQUATIONS            7
+BLOCKS OF VARIABLES           2     SINGLE VARIABLES           21
+NON ZERO ELEMENTS            55     NON LINEAR N-Z             20
+CODE LENGTH                  82     CONSTANT POOL              32
+
+
+GENERATION TIME      =        0.001 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 6
+第五章练习题
+Solution Report     SOLVE sambal Using NLP From line 53
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   sambal              OBJECTIVE  z
+     TYPE    NLP                 DIRECTION  MINIMIZE
+     SOLVER  CONOPT              FROM LINE  53
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      2 Locally Optimal
+**** OBJECTIVE VALUE             4812.9630
+
+ RESOURCE USAGE, LIMIT          0.021 10000000000.000
+ ITERATION COUNT, LIMIT         4    2147483647
+ EVALUATION ERRORS              0             0
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.36
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 7 constraints and 21 variables
+    with 55 Jacobian elements, 20 of which are nonlinear.
+    The Hessian of the Lagrangian has 20 elements on the diagonal,
+    0 elements below the diagonal, and 20 nonlinear variables.
+ 
+    The post-triangular part of the model has 1 constraints and variables.
+ 
+    Preprocessed model has 6 constraints and 20 variables
+    with 34 Jacobian elements, 0 of which are nonlinear.
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+ 
+ CONOPT time Total                            0.007 seconds
+   of which: Function evaluations             0.000 =  0.0%
+             1st Derivative evaluations       0.000 =  0.0%
+             2nd Derivative evaluations       0.000 =  0.0%
+             Directional 2nd Deriv(Hess)      0.000 =  0.0%
+             Interval derivative evals        0.000 =  0.0%
+ 
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU sumsquare           .              .              .             1.0000      
+
+  sumsquare  目标函数 即平方差之和的等式
+
+---- EQU balance  各个账户的平衡限制条件
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1          .              .              .            -7.9630      
+sec2          .              .              .             5.3704      
+sec3          .              .              .             0.9259      
+lab           .       -4.45652E-10          .              .          
+cap           .              .              .            10.0000      
+hh            .              .              .            61.6667      
+
+---- VAR Q  要调整的SAM表中的各个数值
+
+                 LOWER          LEVEL          UPPER         MARGINAL
+
+sec1.sec1          .           160.0000        +INF            EPS         
+sec1.sec2          .           143.3333        +INF            EPS         
+sec1.sec3          .            85.5556        +INF            EPS         
+sec1.hh            .           505.1852        +INF            EPS         
+sec2.sec1          .           146.6667        +INF            EPS         
+sec2.sec2          .           320.0000        +INF            EPS         
+sec2.sec3          .           172.2222        +INF            EPS         
+sec2.hh            .           881.8519        +INF             .          
+sec3.sec1          .            84.4444        +INF            EPS         
+sec3.sec2          .           147.7778        +INF            EPS         
+sec3.sec3          .           250.0000        +INF            EPS         
+sec3.hh            .           579.6296        +INF             .          
+lab .sec1          .           323.9815        +INF             .          
+lab .sec2          .           357.3148        +INF            EPS         
+lab .sec3          .           399.5370        +INF            EPS         
+cap .sec1          .           178.9815        +INF            EPS         
+cap .sec2          .           552.3148        +INF            EPS         
+cap .sec3          .           154.5370        +INF            EPS         
+hh  .lab           .          1080.8333        +INF             .          
+hh  .cap           .           885.8333        +INF             .          
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR z                 -INF         4812.9630        +INF             .          
+
+  z  目标函数的数值 即平方差之和
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 7
+第五章练习题
+E x e c u t i o n
+
+
+----     56 第一题结果
+
+----     56 VARIABLE Q.L  要调整的SAM表中的各个数值
+
+            sec1        sec2        sec3         lab         cap          hh
+
+sec1     160.000     143.333      85.556                             505.185
+sec2     146.667     320.000     172.222                             881.852
+sec3      84.444     147.778     250.000                             579.630
+lab      323.981     357.315     399.537
+cap      178.981     552.315     154.537
+hh                                          1080.833     885.833
+
+
+----     56 VARIABLE z.L                   =     4812.963  目标函数的数值 即平方差之和
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 8
+第五章练习题
+Equation Listing    SOLVE sambal1 Using NLP From line 81
+
+
+---- sumsquare1  =E=  
+
+sumsquare1..  (0)*Q1(sec1,sec1) + (0)*Q1(sec1,sec2) + (0)*Q1(sec1,sec3) + (0)*Q1(sec1,hh) + (0)*Q1(sec2,sec1) + (0)*Q1(sec2,sec2) + (0)*Q1(sec2,sec3) + (0)*Q1(sec2,hh) + (0)*Q1(sec3,sec1) + (0)*Q1(sec3,sec2) + (0)*Q1(sec3,sec3) + (0)*Q1(sec3,hh) + (0)*Q1(lab,sec1) + (0)*Q1(lab,sec2) + (0)*Q1(lab,sec3) + (0)*Q1(cap,sec1) + (0)*Q1(cap,sec2) + (0)*Q1(cap,sec3) + (0)*Q1(hh,lab) + (0)*Q1(hh,cap) + z1 =E= 0 ; (LHS = 0)
+     
+
+---- balance1  =E=  
+
+balance1(sec1)..  Q1(sec1,sec2) + Q1(sec1,sec3) + Q1(sec1,hh) - Q1(sec2,sec1) - Q1(sec3,sec1) - Q1(lab,sec1) - Q1(cap,sec1) =E= 0 ; (LHS = 70, INFES = 70 ****)
+     
+balance1(sec2)..  - Q1(sec1,sec2) + Q1(sec2,sec1) + Q1(sec2,sec3) + Q1(sec2,hh) - Q1(sec3,sec2) - Q1(lab,sec2) - Q1(cap,sec2) =E= 0 ; (LHS = 10, INFES = 10 ****)
+     
+balance1(sec3)..  - Q1(sec1,sec3) - Q1(sec2,sec3) + Q1(sec3,sec1) + Q1(sec3,sec2) + Q1(sec3,hh) - Q1(lab,sec3) - Q1(cap,sec3) =E= 0 ; (LHS = 30, INFES = 30 ****)
+     
+REMAINING 3 ENTRIES SKIPPED
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 9
+第五章练习题
+Column Listing      SOLVE sambal1 Using NLP From line 81
+
+
+---- Q1  
+
+Q1(sec1,sec1)
+                (.LO, .L, .UP, .M = 0, 160, +INF, 0)
+       (0)      sumsquare1
+
+Q1(sec1,sec2)
+                (.LO, .L, .UP, .M = 0, 150, +INF, 0)
+       (0)      sumsquare1
+        1       balance1(sec1)
+       -1       balance1(sec2)
+
+Q1(sec1,sec3)
+                (.LO, .L, .UP, .M = 0, 90, +INF, 0)
+       (0)      sumsquare1
+        1       balance1(sec1)
+       -1       balance1(sec3)
+
+REMAINING 17 ENTRIES SKIPPED
+
+---- z1  
+
+z1
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       sumsquare1
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 10
+第五章练习题
+Range Statistics    SOLVE sambal1 Using NLP From line 81
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [        NA,        NA] - Zero values observed as well
+Bound     [min, max] : [ 5.400E+02, 9.100E+02] - Zero values observed as well
+Matrix    [min, max] : [ 1.000E+00, 1.000E+00] - Zero values observed as well
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 11
+第五章练习题
+Model Statistics    SOLVE sambal1 Using NLP From line 81
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           2     SINGLE EQUATIONS            7
+BLOCKS OF VARIABLES           2     SINGLE VARIABLES           21
+NON ZERO ELEMENTS            55     NON LINEAR N-Z             20
+CODE LENGTH                  82     CONSTANT POOL              32
+
+
+GENERATION TIME      =        0.001 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 12
+第五章练习题
+Solution Report     SOLVE sambal1 Using NLP From line 81
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   sambal1             OBJECTIVE  z1
+     TYPE    NLP                 DIRECTION  MINIMIZE
+     SOLVER  CONOPT              FROM LINE  81
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      2 Locally Optimal
+**** OBJECTIVE VALUE            13550.0000
+
+ RESOURCE USAGE, LIMIT          0.004 10000000000.000
+ ITERATION COUNT, LIMIT         4    2147483647
+ EVALUATION ERRORS              0             0
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.36
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 7 constraints and 21 variables
+    with 55 Jacobian elements, 20 of which are nonlinear.
+    The Hessian of the Lagrangian has 20 elements on the diagonal,
+    0 elements below the diagonal, and 20 nonlinear variables.
+ 
+    The pre-triangular part of the model has 0 constraints and 3 variables.
+    The post-triangular part of the model has 1 constraints and variables.
+ 
+    Preprocessed model has 6 constraints and 17 variables
+    with 28 Jacobian elements, 0 of which are nonlinear.
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+ 
+ CONOPT time Total                            0.000 seconds
+   of which: Function evaluations             0.000 =  0.0%
+             1st Derivative evaluations       0.000 =  0.0%
+             2nd Derivative evaluations       0.000 =  0.0%
+             Directional 2nd Deriv(Hess)      0.000 =  0.0%
+             Interval derivative evals        0.000 =  0.0%
+ 
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU sumsquare1          .              .              .             1.0000      
+
+---- EQU balance1  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1          .              .              .           -40.0000      
+sec2          .              .              .           -25.0000      
+sec3          .              .              .           -30.0000      
+lab           .       2.273737E-13          .              .          
+cap           .              .              .            10.0000      
+hh            .              .              .           155.0000      
+
+---- VAR Q1  
+
+                 LOWER          LEVEL          UPPER         MARGINAL
+
+sec1.sec1          .           160.0000        +INF            EPS         
+sec1.sec2          .           142.5000        +INF            EPS         
+sec1.sec3          .            85.0000        +INF             .          
+sec1.hh         540.0000       540.0000       540.0000       195.0000      
+sec2.sec1          .           147.5000        +INF             .          
+sec2.sec2          .           320.0000        +INF            EPS         
+sec2.sec3          .           172.5000        +INF            EPS         
+sec2.hh         910.0000       910.0000       910.0000       180.0000      
+sec3.sec1          .            85.0000        +INF            EPS         
+sec3.sec2          .           147.5000        +INF            EPS         
+sec3.sec3          .           250.0000        +INF            EPS         
+sec3.hh         610.0000       610.0000       610.0000       185.0000      
+lab .sec1          .           340.0000        +INF            EPS         
+lab .sec2          .           372.5000        +INF            EPS         
+lab .sec3          .           415.0000        +INF            EPS         
+cap .sec1          .           195.0000        +INF            EPS         
+cap .sec2          .           567.5000        +INF             .          
+cap .sec3          .           170.0000        +INF            EPS         
+hh  .lab           .          1127.5000        +INF             .          
+hh  .cap           .           932.5000        +INF             .          
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR z1                -INF        13550.0000        +INF             .          
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 13
+第五章练习题
+E x e c u t i o n
+
+
+----     84 第二题结果
+
+----     84 VARIABLE Q1.L  
+
+            sec1        sec2        sec3         lab         cap          hh
+
+sec1     160.000     142.500      85.000                             540.000
+sec2     147.500     320.000     172.500                             910.000
+sec3      85.000     147.500     250.000                             610.000
+lab      340.000     372.500     415.000
+cap      195.000     567.500     170.000
+hh                                          1127.500     932.500
+
+
+----     84 VARIABLE z1.L                  =    13550.000  
+
+----    112 第四题结果
+
+----    112 PARAMETER SAM  
+
+              sec1        sec2        sec3         lab         cap          hh       total      tartot
+
+sec1       105.094      99.618      99.163                             616.125     920.000     920.000
+sec2        92.554     213.898     188.524                            1045.024    1540.000    1540.000
+sec3        93.532     177.318     490.299                            1238.851    2000.000    2000.000
+lab        472.334     537.269     990.397                                        2000.000    2000.000
+cap        156.487     511.896     231.617                                         900.000     900.000
+hh                                            2000.000     900.000                2900.000    2900.000
+total      920.000    1540.000    2000.000    2000.000     900.000    2900.000
+tartot     920.000    1540.000    2000.000    2000.000     900.000    2900.000
+
+
+----    122 PARAMETER H0                   =     7430.000  
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 14
+第五章练习题
+Equation Listing    SOLVE sambal2 Using NLP From line 156
+
+
+---- Hequ  =E=  
+
+Hequ..  - Q(sec1,sec1) - Q(sec1,sec2) - Q(sec1,sec3) - Q(sec1,hh) - Q(sec2,sec1) - Q(sec2,sec2) - Q(sec2,sec3) - Q(sec2,hh) - Q(sec3,sec1) - Q(sec3,sec2) - Q(sec3,sec3) - Q(sec3,hh) - Q(lab,sec1) - Q(lab,sec2) - Q(lab,sec3) - Q(cap,sec1) - Q(cap,sec2) - Q(cap,sec3) - Q(hh,lab) - Q(hh,cap) + H =E= 0 ; (LHS = 19.9999999993033, INFES = 19.9999999993033 ****)
+     
+
+---- Hratioequ  =E=  
+
+Hratioequ..  - 0.000134589502018843*H + Hratio =E= 0 ; (LHS = -0.5, INFES = 0.5 ****)
+     
+
+---- balance2  =E=  
+
+balance2(sec1)..  Q2(sec1,sec2) + Q2(sec1,sec3) + Q2(sec1,hh) - Q2(sec2,sec1) - Q2(sec3,sec1) - Q2(lab,sec1) - Q2(cap,sec1) =E= 0 ; (LHS = 70, INFES = 70 ****)
+     
+balance2(sec2)..  - Q2(sec1,sec2) + Q2(sec2,sec1) + Q2(sec2,sec3) + Q2(sec2,hh) - Q2(sec3,sec2) - Q2(lab,sec2) - Q2(cap,sec2) =E= 0 ; (LHS = 10, INFES = 10 ****)
+     
+balance2(sec3)..  - Q2(sec1,sec3) - Q2(sec2,sec3) + Q2(sec3,sec1) + Q2(sec3,sec2) + Q2(sec3,hh) - Q2(lab,sec3) - Q2(cap,sec3) =E= 0 ; (LHS = 30, INFES = 30 ****)
+     
+REMAINING 3 ENTRIES SKIPPED
+
+
+---- obj  =E=  
+
+obj..  - (0.000134589502018843)*Q(sec1,sec1) - (0.00012847074373111)*Q(sec1,sec2) - (0.000127773387238348)*Q(sec1,sec3) - (0.000125619909264544)*Q(sec1,hh) - (0.000140850607757195)*Q(sec2,sec1) - (0.000134589502018843)*Q(sec2,sec2) - (0.000136337442197518)*Q(sec2,sec3) - (0.000130360629066796)*Q(sec2,hh) - (0.000141866382405195)*Q(sec3,sec1) - (0.000132580666188755)*Q(sec3,sec2) - (0.000134589502018843)*Q(sec3,sec3) - (0.000127716066325346)*Q(sec3,hh) - (0.000136253749992361)*Q(lab,sec1) - (0.000133581856790901)*Q(lab,sec2) - (0.00013443363691506)*Q(lab,sec3) - (0.000141518695562609)*Q(cap,sec1) - (0.000135154767452999)*Q(cap,sec2) - (0.000138600066680738)*Q(cap,sec3) - (0.000138484816200634)*Q(hh,lab) - (0.000138572871103572)*Q(hh,cap) - (2.88018258139299E-7)*H + (2)*Hratio + z2 =E= 0 ; (LHS = -0.69100720490197, INFES = 0.69100720490197 ****)
+     
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 15
+第五章练习题
+Column Listing      SOLVE sambal2 Using NLP From line 156
+
+
+---- Q  要调整的SAM表中的各个数值
+
+Q(sec1,sec1)
+                (.LO, .L, .UP, .M = 0, 160, +INF, EPS)
+       -1       Hequ
+      (-0.0001) obj
+
+Q(sec1,sec2)
+                (.LO, .L, .UP, .M = 0, 143.333333333177, +INF, EPS)
+       -1       Hequ
+      (-0.0001) obj
+
+Q(sec1,sec3)
+                (.LO, .L, .UP, .M = 0, 85.555555555528, +INF, EPS)
+       -1       Hequ
+      (-0.0001) obj
+
+REMAINING 17 ENTRIES SKIPPED
+
+---- Q2  
+
+Q2(sec1,sec2)
+                (.LO, .L, .UP, .M = 0, 150, +INF, 0)
+        1       balance2(sec1)
+       -1       balance2(sec2)
+
+Q2(sec1,sec3)
+                (.LO, .L, .UP, .M = 0, 90, +INF, 0)
+        1       balance2(sec1)
+       -1       balance2(sec3)
+
+Q2(sec1,hh)
+                (.LO, .L, .UP, .M = 0, 540, +INF, 0)
+        1       balance2(sec1)
+       -1       balance2(hh)
+
+REMAINING 14 ENTRIES SKIPPED
+
+---- H  
+
+H
+                (.LO, .L, .UP, .M = 0, 7430, +INF, 0)
+        1       Hequ
+       -0.0001  Hratioequ
+ (-2.880183E-7) obj
+
+
+---- Hratio  
+
+Hratio
+                (.LO, .L, .UP, .M = 0.5, 0.5, 2, 0)
+        1       Hratioequ
+       (2)      obj
+        0       (OLD LEVEL ****)
+
+
+---- z2  
+
+z2
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        1       obj
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 16
+第五章练习题
+Range Statistics    SOLVE sambal2 Using NLP From line 156
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [        NA,        NA] - Zero values observed as well
+Bound     [min, max] : [ 5.000E-01, 2.000E+00] - Zero values observed as well
+Matrix    [min, max] : [ 2.880E-07, 2.000E+00]
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 17
+第五章练习题
+Model Statistics    SOLVE sambal2 Using NLP From line 156
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           4     SINGLE EQUATIONS            9
+BLOCKS OF VARIABLES           5     SINGLE VARIABLES           40  1 projected
+NON ZERO ELEMENTS            80     NON LINEAR N-Z             22
+CODE LENGTH                 186     CONSTANT POOL              32
+
+
+GENERATION TIME      =        0.001 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 18
+第五章练习题
+Solution Report     SOLVE sambal2 Using NLP From line 156
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   sambal2             OBJECTIVE  z2
+     TYPE    NLP                 DIRECTION  MINIMIZE
+     SOLVER  CONOPT              FROM LINE  156
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      2 Locally Optimal
+**** OBJECTIVE VALUE                0.0000
+
+ RESOURCE USAGE, LIMIT          0.004 10000000000.000
+ ITERATION COUNT, LIMIT         6    2147483647
+ EVALUATION ERRORS              0             0
+--- *** This solver runs with a demo license. No commercial use.
+ 
+ 
+    C O N O P T   version 4.36
+    Copyright (C) GAMS Software GmbH
+                  GAMS Development Corporation
+ 
+    Will use up to 4 threads.
+ 
+ 
+    The user model has 9 constraints and 40 variables
+    with 80 Jacobian elements, 22 of which are nonlinear.
+    The Hessian of the Lagrangian has 22 elements on the diagonal,
+    20 elements below the diagonal, and 22 nonlinear variables.
+ 
+    The post-triangular part of the model has 2 constraints and variables.
+ 
+    Preprocessed model has 7 constraints and 38 variables
+    with 55 Jacobian elements, 0 of which are nonlinear.
+ 
+ ** Optimal solution. Reduced gradient less than tolerance.
+ 
+ 
+ CONOPT time Total                            0.001 seconds
+   of which: Function evaluations             0.000 =  0.0%
+             1st Derivative evaluations       0.000 =  0.0%
+             2nd Derivative evaluations       0.000 =  0.0%
+             Directional 2nd Deriv(Hess)      0.000 =  0.0%
+             Interval derivative evals        0.000 =  0.0%
+ 
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU Hequ                .              .              .            -0.0001      
+---- EQU Hratioequ           .              .              .            -0.9971      
+
+---- EQU balance2  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1          .              .              .             EPS         
+sec2          .              .              .             EPS         
+sec3          .              .              .             EPS         
+lab           .              .              .              .          
+cap           .              .              .             EPS         
+hh            .              .              .             EPS         
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- EQU obj                 .              .              .             1.0000      
+
+---- VAR Q  要调整的SAM表中的各个数值
+
+                 LOWER          LEVEL          UPPER         MARGINAL
+
+sec1.sec1          .           160.4607        +INF            EPS         
+sec1.sec2          .           150.4320        +INF      7.337827E-11      
+sec1.sec3          .            90.2592        +INF      9.154502E-11      
+sec1.hh            .           541.5549        +INF      -2.39401E-12      
+sec2.sec1          .           140.4031        +INF      -3.85741E-11      
+sec2.sec2          .           320.9212        +INF      -1.00932E-10      
+sec2.sec3          .           170.4898        +INF      2.528639E-10      
+sec2.hh            .           912.6203        +INF      -1.60484E-11      
+sec3.sec1          .            80.2304        +INF      9.955847E-11      
+sec3.sec2          .           150.4318        +INF      -8.37913E-11      
+sec3.sec3          .           250.7198        +INF      -1.98727E-11      
+sec3.hh            .           611.7565        +INF            EPS         
+lab .sec1          .           320.9212        +INF      -8.91226E-11      
+lab .sec2          .           361.0369        +INF      8.112574E-11      
+lab .sec3          .           401.1520        +INF      6.512729E-11      
+cap .sec1          .           170.4896        +INF      2.722666E-11      
+cap .sec2          .           551.5837        +INF      -7.53217E-12      
+cap .sec3          .           150.4319        +INF      -9.18313E-12      
+hh  .lab           .          1053.0234        +INF      -1.26902E-11      
+hh  .cap           .           862.4763        +INF      -1.24547E-11      
+
+---- VAR Q2  
+
+                 LOWER          LEVEL          UPPER         MARGINAL
+
+sec1.sec2          .           150.0000        +INF            EPS         
+sec1.sec3          .            90.0000        +INF            EPS         
+sec1.hh            .           470.0000        +INF            EPS         
+sec2.sec1          .           140.0000        +INF            EPS         
+sec2.sec3          .           170.0000        +INF            EPS         
+sec2.hh            .           900.0000        +INF             .          
+sec3.sec1          .            80.0000        +INF            EPS         
+sec3.sec2          .           150.0000        +INF            EPS         
+sec3.hh            .           580.0000        +INF             .          
+lab .sec1          .           320.0000        +INF             .          
+lab .sec2          .           360.0000        +INF            EPS         
+lab .sec3          .           400.0000        +INF            EPS         
+cap .sec1          .           170.0000        +INF            EPS         
+cap .sec2          .           550.0000        +INF            EPS         
+cap .sec3          .           150.0000        +INF            EPS         
+hh  .lab           .          1080.0000        +INF             .          
+hh  .cap           .           870.0000        +INF             .          
+
+                           LOWER          LEVEL          UPPER         MARGINAL
+
+---- VAR H                   .          7451.3950        +INF             .          
+---- VAR Hratio             0.5000         1.0029         2.0000          .          
+---- VAR z2                -INF      9.422237E-14        +INF             .          
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/17/25 17:20:05 Page 19
+第五章练习题
+E x e c u t i o n
+
+
+----    159 第五题结果
+
+----    159 VARIABLE Q2.L  
+
+            sec1        sec2        sec3         lab         cap          hh
+
+sec1     160.000     150.000      90.000                             470.000
+sec2     140.000     320.000     170.000                             900.000
+sec3      80.000     150.000     250.000                             580.000
+lab      320.000     360.000     400.000
+cap      170.000     550.000     150.000
+hh                                          1080.000     870.000
+
+
+----    159 VARIABLE z2.L                  =  9.42224E-14  
+            VARIABLE Hratio.L              =        1.003  
+
+
+EXECUTION TIME       =        0.104 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+
+
+USER: GAMS Demo, for EULA and demo limitations see   G250131/0001CB-GEN
+      https://www.gams.com/latest/docs/UG%5FLicense.html         DC0000
+
+
+**** FILE SUMMARY
+
+Input      /Users/zhangshuai/Desktop/cge/ch5.gms
+Output     /Users/zhangshuai/Desktop/cge/ch5.lst

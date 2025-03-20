@@ -1,0 +1,279 @@
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 1
+G e n e r a l   A l g e b r a i c   M o d e l i n g   S y s t e m
+C o m p i l a t i o n
+
+
+   1  *==================================================
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 2
+第2章习题第二题
+C o m p i l a t i o n
+
+
+   3  *==================================================
+   4  * 先设定集合
+   5  set ac     /sec1,sec2,sec3,labor,capital,finaluse,total/ ;
+   6  set i(ac)  /sec1,sec2,sec3/;
+   7  set z(ac)  /labor, capital/;
+   8  alias (i,j);
+   9   
+  10  *=====================================================================
+  11  *将投入产出表的数据读入。
+  12  *用指令table宣称， 然后命名表格，如这里IO。括号里面包括行和列两个变量元素。注意对准每列的数据。没有数据的地方GAMS读成0。
+  13  *=====================================================================
+  14  table IO(*,*)
+  15          sec1 sec2 sec3 finaluse total
+  16  sec1    160  150  90      480    880
+  17  sec2    140  320  170     900    1530
+  18  sec3    80   150  250     590    1070
+  19  labor   320  350  410
+  20  capital 180  560  150
+  21  total   880 1530  1070
+  22  ;
+  23   
+  24  *======================================================================
+      GAMS语言中的parameter(参数)，包括参数、常数、标量、和经济学上的外生变量。它们的特点，就是数值必须外生给定。
+      GAMS语言中的variable（变量），是系统内部计算出来的变量。也就是经济学上的内生变量。
+      对参数来说，先要声明或定义所用的参数和外生变量。以"parameter"宣称，然后每行列出一个参数。参数符号须用字母开头，后面可以跟字母或数字。如B,TA,Q3，等等。
+      每行开头是参数符号。 空几格后可以对参数做注释说明(虽然这注释说明是可选项，但是对以后理解程序有帮助)。
+      两维度的参数集，如下面int(i,j)所示，括号里面第一个元素（indexed set）为行，第二个元素为列。
+      初始值习惯上用"0"结尾，如下面的Q0。注意数字0和字母O的差别。
+      整段最后用分号结尾。
+  34  *=======================================================================
+  35  parameter
+  36  int(i,j)       intermidiate input 中间投入数量
+  37  use(i)         finaluse 最终使用
+  38  vat(z,j)       value add total 增加值等于劳动报酬加资本
+  39  a(i,j)         direct input-output coefficients 投入产出直接消耗系数
+  40  Q0(i)          initial value for total output 总产出的初始值
+  41  ;
+  42   
+  43  *========================================================================
+  44  * 对参数赋值和定义 assignment for parameters
+  45  * calibration 校调(估算)参数值
+  46  * 每个等式后有分号。
+  47  * 对其它没有直接数值的参数校调估算。等号左面的参数数值由右面的已知参数数值决定。
+  48  * 右面参数数值必须在前面的程序指令中已给定或者被说明。
+  49  *========================================================================
+  50  int(i,j)=IO(i,j);
+  51  use(i) =IO(i,"finaluse");
+  52  vat(z,i) =IO(z,i);
+  53  Q0(i)=IO("total",i);
+  54  a(i,j)=int(i,j)/Q0(j);
+  55  *display 打印展示数值
+  56  display int,use,vat,q0,a;
+  57   
+  58  *=====================================================
+  59  Display ' 以下为模拟部分 Simulation'
+  60  *=====================================================
+  61  *模拟 simulation
+  62  *模拟政策或其它外界变量变化后对模型(内生)变量的影响
+  63  *假设部门2的产量增加100
+  64  *=====================================================
+  65  parameter
+  66  use2(i)  changes in the finaluse
+  67           /sec1   0
+  68           sec2    200
+  69           sec3    0 /  ;
+  70   
+  71  variable
+  72  Q(i)      total output 总产出变量;
+  73   
+  74  *=====================================================
+  75  *对模型等式取新名commodityequi2，并将新的数据写进
+  76  *对模拟的模型取新名，如IOmodelSim，表示模拟
+  77  *指令solve,运行和求解模型。指明这次求解的等式为
+  78  *=====================================================
+  79  equation
+  80  commodityequi2(i);
+  81   
+  82  commodityequi2(i)..
+  83  sum(j,a(i,j)*Q(j))+use2(i)=e=Q(i);
+  84   
+  85  model SimIOmodel /commodityequi2/
+  86  solve SimIOmodel using mcp;
+  87   
+  88  *打印最后结果 result output。单引号里面的文字说明也会打印出来
+  89  display 'Q.l， 为求解的结果',    Q.l
+  90   
+  91  *=====================================================
+  92  *结束 the end
+  93  *=====================================================
+  94   
+
+
+COMPILATION TIME     =        0.000 SECONDS      3 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 3
+第2章习题第二题
+E x e c u t i o n
+
+
+----     56 PARAMETER int  intermidiate input 中间投入数量
+
+            sec1        sec2        sec3
+
+sec1     160.000     150.000      90.000
+sec2     140.000     320.000     170.000
+sec3      80.000     150.000     250.000
+
+
+----     56 PARAMETER use  finaluse 最终使用
+
+sec1 480.000,    sec2 900.000,    sec3 590.000
+
+
+----     56 PARAMETER vat  value add total 增加值等于劳动报酬加资本
+
+               sec1        sec2        sec3
+
+labor       320.000     350.000     410.000
+capital     180.000     560.000     150.000
+
+
+----     56 PARAMETER Q0  initial value for total output 总产出的初始值
+
+sec1  880.000,    sec2 1530.000,    sec3 1070.000
+
+
+----     56 PARAMETER a  direct input-output coefficients 投入产出直接消耗系数
+
+            sec1        sec2        sec3
+
+sec1       0.182       0.098       0.084
+sec2       0.159       0.209       0.159
+sec3       0.091       0.098       0.234
+
+
+----     59  以下为模拟部分 Simulation
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 4
+第2章习题第二题
+Equation Listing    SOLVE SimIOmodel Using MCP From line 86
+
+
+---- commodityequi2  =E=  
+
+commodityequi2(sec1)..  - 0.818181818181818*Q(sec1) + 0.0980392156862745*Q(sec2) + 0.0841121495327103*Q(sec3) =E= 0 ; (LHS = 0)
+     
+commodityequi2(sec2)..  0.159090909090909*Q(sec1) - 0.790849673202614*Q(sec2) + 0.158878504672897*Q(sec3) =E= -200 ; (LHS = 0, INFES = 200 ****)
+     
+commodityequi2(sec3)..  0.0909090909090909*Q(sec1) + 0.0980392156862745*Q(sec2) - 0.766355140186916*Q(sec3) =E= 0 ; (LHS = 0)
+     
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 5
+第2章习题第二题
+Column Listing      SOLVE SimIOmodel Using MCP From line 86
+
+
+---- Q  total output 总产出变量
+
+Q(sec1)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+       -0.8182  commodityequi2(sec1)
+        0.1591  commodityequi2(sec2)
+        0.0909  commodityequi2(sec3)
+
+Q(sec2)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        0.098   commodityequi2(sec1)
+       -0.7908  commodityequi2(sec2)
+        0.098   commodityequi2(sec3)
+
+Q(sec3)
+                (.LO, .L, .UP, .M = -INF, 0, +INF, 0)
+        0.0841  commodityequi2(sec1)
+        0.1589  commodityequi2(sec2)
+       -0.7664  commodityequi2(sec3)
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 6
+第2章习题第二题
+Range Statistics    SOLVE SimIOmodel Using MCP From line 86
+
+
+RANGE STATISTICS (ABSOLUTE NON-ZERO FINITE VALUES)
+
+RHS       [min, max] : [ 2.000E+02, 2.000E+02] - Zero values observed as well
+Bound     [min, max] : [        NA,        NA]
+Matrix    [min, max] : [ 8.411E-02, 8.182E-01]
+
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 7
+第2章习题第二题
+Model Statistics    SOLVE SimIOmodel Using MCP From line 86
+
+
+MODEL STATISTICS
+
+BLOCKS OF EQUATIONS           1     SINGLE EQUATIONS            3
+BLOCKS OF VARIABLES           1     SINGLE VARIABLES            3
+NON ZERO ELEMENTS             9     NON LINEAR N-Z              0
+CODE LENGTH                   0     CONSTANT POOL              16
+
+
+GENERATION TIME      =        0.006 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 8
+第2章习题第二题
+Solution Report     SOLVE SimIOmodel Using MCP From line 86
+
+
+               S O L V E      S U M M A R Y
+
+     MODEL   SimIOmodel          
+     TYPE    MCP                 
+     SOLVER  PATH                FROM LINE  86
+
+**** SOLVER STATUS     1 Normal Completion
+**** MODEL STATUS      1 Optimal
+
+ RESOURCE USAGE, LIMIT          0.003 10000000000.000
+ ITERATION COUNT, LIMIT         0    2147483647
+ EVALUATION ERRORS              0             0
+*** This solver runs with a demo license. No commercial use.
+3 row/cols, 9 non-zeros, 100.00% dense.
+
+Path 5.2.01 (Wed Mar  5 17:53:09 2025)
+Written by Todd Munson, Steven Dirkse, Youngdae Kim, and Michael Ferris
+
+
+---- EQU commodityequi2  
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1          .       -3.05535E-15          .            36.0633      
+sec2      -200.0000      -200.0000      -200.0000       267.8916      
+sec3          .       2.030873E-16          .            38.5492      
+
+---- VAR Q  total output 总产出变量
+
+            LOWER          LEVEL          UPPER         MARGINAL
+
+sec1        -INF           36.0633        +INF      -3.05535E-15      
+sec2        -INF          267.8916        +INF      -2.84217E-14      
+sec3        -INF           38.5492        +INF      2.030873E-16      
+
+
+**** REPORT SUMMARY :        0     NONOPT
+                             0 INFEASIBLE
+                             0  UNBOUNDED
+                             0  REDEFINED
+                             0     ERRORS
+GAMS 49.2.0  9b2b0844 Mar 5, 2025           DAX-DAC arm 64bit/macOS - 03/13/25 21:12:30 Page 9
+第2章习题第二题
+E x e c u t i o n
+
+
+----     89 Q.l， 为求解的结果
+
+----     89 VARIABLE Q.L  total output 总产出变量
+
+sec1  36.063,    sec2 267.892,    sec3  38.549
+
+
+
+EXECUTION TIME       =        0.046 SECONDS      4 MB  49.2.0 9b2b0844 DAX-DAC
+
+
+USER: GAMS Demo, for EULA and demo limitations see   G250131/0001CB-GEN
+      https://www.gams.com/latest/docs/UG%5FLicense.html         DC0000
+
+
+**** FILE SUMMARY
+
+Input      /Users/zhangshuai/Desktop/cge/ch2.gms
+Output     /Users/zhangshuai/Desktop/cge/ch2.lst
